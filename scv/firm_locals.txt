@@ -1,0 +1,40 @@
+X = times jumped to/called
+
+A  - 10 xxxxx - 
+17 - 23 x     - 
+2F - 47 x     - TONE_2_HANDLER
+31 - 49 x     - TONE_3_HANDLER
+34 - 52 x     - 
+36 - 54 x     - TONE_4_HANDLER_2
+3D - 61 x     - 
+40 - 64 x     - 
+47 - 71 xxx   - 
+49 - 73 x     - TONE_1_HANDLER
+51 - 81 x     - 
+59 - 89 x     - 
+61 - 97 x     - 
+70 - 112 xx   - 
+7D - 125 x    - TONE_4_HANDLER_1
+88 - 136 x    - 
+B0 - 176 xx   - 
+B3 - 179 x    - 
+B7 - 183 x    - 
+BE - 190 x    - 
+C6 - 198 x    - 
+C9 - 201 x    - 
+CD - 205 x    - 
+D7 - 215 x    - 
+DD - 221 x    - 
+E3 - 227 x    - 
+E7 - 231 x    - 
+
+SUBROUTINES
+F6 - 246 x
+
+121 - 289 x
+126 - 294 x
+128 - 296 x
+12F - 303 xx
+
+27 main labels
+5 sublabels, 6 subroutines

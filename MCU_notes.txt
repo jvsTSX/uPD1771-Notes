@@ -1,0 +1,267 @@
+-----------------------------------------------------------
+
+                         MISC INFO
+
+-----------------------------------------------------------
+The 1771 is a harvard architecture machine and therefore has two memory maps
+
+Data:
+00~1F = scratchpad RAM registers, can do anything
+20~3F = stack and additional RAM, can only be accessed trough the (H) addressing mode
+
+Instruction:
+all RAM, and 16-bit, but
+$0000 is the RESET vector
+$0020 is TONE 4 interrupt vector
+$0024 is TONE 3 interrupt vector
+$0028 is TONE 2 interrupt vector
+$002C is TONE 1 interrupt vector
+$0048 is NOISE interrupt vector
+$0080 is TIME interrupt vector
+$0060 is EXT interrupt vector
+and for the 1771 at least, there are only 512 instruction words, ending the instruction map at $02FF
+but according to the EVACHIP, it's capable of addressing 64Kwords as can be seen from the CALL1, TBL1 and CALL0, TBL0 instructions
+
+
+
+Interrupt sources are weird as well:
+- TONE 4 triggers when N timer reg is set to $08 ~ $0F and has a prescalar of OSC/64
+- TONE 3 triggers when N timer reg is set to $10 ~ $1F and has a prescalar of OSC/32
+- TONE 2 triggers when N timer reg is set to $20 ~ $3F and has a prescalar of OSC/16
+- TONE 1 triggers when N timer reg is set to $40 ~ $FF and has a prescalar of OSC/8
+- NOISE triggers when the PNC2/RG2 3-bit LFSR outputs high
+- TIME triggers when 4096 OSC cycles have elapsed
+
+
+
+OSC being the raw 5 or 6MHz signals from the XI and XO pins
+
+Instruction timing (machine cycles) are set to happen every 8 cycles
+
+All instructions take 1 machine cycle (8 cycles) but TBL0/1 and CALL0/1 take 2 machine cycles (16 cycles)
+
+
+
+The DAC is also weird, it seems to output in a way where values if $80 and above are output as-is while $7F and below are inverted
+maybe because it plays better with the DAC being signed and having actual negative voltages?
+
+you can kind of see on the Super Cassette Vision a section in the ADPCM decoder where it checks for that range and invert the value
+before forwarding it into the DAC, as the ADPCM level counter is unsigned
+
+Waveforms are also visibly half-inverted when opening this ROM as a sample in furnace
+
+-----------------------------------------------------------
+
+                        REGISTERS
+
+-----------------------------------------------------------
+PC          = Program Counter
+Rr          = RAM Registers 0 trough 1F
+A or Acc    = the accumulator register
+X           = multiplicand register, 7 bits wide
+Y           = multiplier register, 5 bits wide
+H           = RAM pointer register, 6 bits wide, when used as pointer it's written as (H)
+RG or PNC   = Random Generator register, it's a 7-bit XNOR LFSR that is initialized to 0 and is clocked every machine cycle
+RG2 or PNC2 = Random Generator 2, it can't seem to be directly set but it's a 3-bit XNOR LFSR that fires the NOISE interrupt
+PA          = Port A, typically a data port between the host device and microcontroller
+PB          = Port B, typically a control signaling port
+DA          = audio DAC register
+MD          = Mode and flags register, 10 bits wide
+MD1         = only flags 7, 6, 5
+MD0         = only flags 9, 8, 4, 3, 2, 1, 0
+
+Register pairing: for some instructions such as TBL0/1 and CALL0/1, the pairs are made up of Rn (even, low) : Rn (odd, high) such as R0 low and R1 high
+
+MD reg flags:
+0 - 32/64 : chooses the size of the ADIMS instruction, if 0 ADIMS only adds to the low 5 bits, or else it adds to the low 6
+1 - TN    : enable tone interrupts
+2 - NS    : enable noise interrupt
+3 - NSF1  : ?
+4 - NSF2  : ??
+5 - NSF3  : ???
+6 - TIME  : enable time interrupt (OSC / 4096)
+7 - EXT   : enable external interrupt
+8 - OUT   : ????????
+9 - IF    : ?????????????????
+
+
+-----------------------------------------------------------
+
+                   INSTRUCTION LISTING
+
+-----------------------------------------------------------
+
+MSB 0
+
+0000 0000 0000 0000 NOP        - does nothing
+0000 0000 0000 0010 OUT PA     - outputs Acc into Port A
+0000 0000 0000 0100 OUT PB     - outputs Acc into Port B
+0000 0000 0000 0101 STF        - sets the carry flag
+0000 0000 0000 1000 MOV X, RG  - samples the random register into X
+
+0000 0001 0000 0001 MON        - i have no clue what this does
+
+0000 0010 0000 0001 MOV N, A   - stores Acc into N timer register
+0000 0010 0000 1000 MOV X, A   - stores Acc into X multiply register
+
+0000 0100 0000 0001 IN PA      - reads port A into Acc
+0000 0100 0000 0010 IN PB      - reads port B into Acc
+0000 0100 0000 0100 RAR        - rotates Acc to the right
+0000 0100 0000 1000 RAL        - rotates Acc to the left
+
+0000 0101 0000 0001 JMPA       - adds the accumulator's contents into the program counter
+0000 0101 0000 0010 OUT DA     - outputs the accumulator into the DAC register
+0000 0101 0000 0100 MUL1       - A = (A + Y >> 1)
+0000 0101 0000 1100 MUL2       - A = (X + Y >> 1) if Y bit 0 is 1, or else the same as MUL1
+
+0000 0110 0000 0010 OFF   - shuts down the 1771 untill reset?
+
+0000 1000 0000 0000 RET   - return from regular subroutine
+0000 1000 0000 0001 RETS  - return from subroutine and then unconditionally skip next instruction
+
+0000 1001 0000 1111 RETI  - return from interrupt
+
+-----------------------------------------------------------
+
+MSB 1
+
+0001 000r rrrr 0000 MOV Y, Rr
+0001 000r rrrr 0101 MOV A, Rr
+0001 000r rrrr 1010 MOV H, Rr
+0001 001r rrrr 0001 MOV Rr, A
+0001 001r rrrr 0010 MOV Rr, H
+0001 001r rrrr 0101 XCHG Rr, A    - swaps values between operands
+0001 001r rrrr 1010 XCHG Rr, H
+
+0001 0100 0000 0101 MOV A, (H)
+0001 010r rrrr 1001 MIX Rr        - performs a signed addition with the range below $80 being inverted
+0001 0110 0000 0001 MOV (H), A
+0001 0110 0000 0101 XCHG (H), A
+
+0001 100r rrrr 0001 TBL0 A, (Rr)  - performs a ROM lookup from the range of $0000 trough $7FFF using a RAM register pair
+0001 100r rrrr 0010 TBL0 X, (Rr)
+0001 100r rrrr 0100 TBL0 Y, (Rr)
+0001 100r rrrr 1000 CALL0 (Rr)    - calls into the range of $0000 trough $7FFF using a RAM register pair
+0001 101r rrrr 0001 TBL1 A, (Rr)  - same as TBL0 but in the range of $8000 trough $FFFF
+0001 101r rrrr 0010 TBL1 X, (Rr)
+0001 101r rrrr 0100 TBL1 Y, (Rr)
+0001 101r rrrr 1000 CALL1 (Rr)    - same as CALL0 but in the range of $8000 trough $FFFF
+
+- Note that TBL instruction is always lagging by 1 word, so addressing $200 will give you $1FE instead
+- and yes, TBL addresses individual bytes by selecting the low or high half of the ROM word based on the pair's low register's bit 0 (0 = low, 1 = high)
+
+-----------------------------------------------------------
+
+MSB 2
+0010 0000 nnnn 0000 JPS n         - jumps to a page (PC = $xx00)
+0010 0001 0nnn nnnn MVI MD0, n
+0010 1000 nnnn nnnn JMPFZ n       - sets the low half of PC as the 8-bit constant (PC = $HHxx) if (some flag? ALU? internal Zero flag?) is clear, or else just keep going if it's 1
+
+-----------------------------------------------------------
+
+MSB 3
+0011 0001 nnn0 0000 MVI MD0, n
+0011 0010 nnnn nnnn MVI (H), n
+0011 0100 nnnn nnnn MVI A, n
+0011 1000 00nn nnnn MVI H, n
+
+-----------------------------------------------------------
+
+MSB 4+5
+010r rrrr nnnn nnnn MVI Rr, n
+
+-----------------------------------------------------------
+
+MSB 6
+0110 nnnn nnnn nnnn JMP n   - absolute jump to new location (using 12-bit constant, upper 4 bits are preserved)
+
+-----------------------------------------------------------
+
+MSB 7
+0111 nnnn nnnn nnnn CALL n  - same as JMP but it pushes the last location into the stack
+
+-----------------------------------------------------------
+-----------------------------------------------------------
+ALU OPS
+-----------------------------------------------------------
+-----------------------------------------------------------
+
+MSB 8+9
+100p ppp0 nnnn nnnn <OP>I A, n
+1000 ppp1 nnn0 0000 <OP>I MD1, n
+1001 ppp1 nnnn nnnn <OP>I MD0, n
+
+-----------------------------------------------------------
+
+MSB A+B
+101p ppp0 nnnn nnnn <OP> (H), n
+101p ppp1 --nn nnnn <OP> H, n
+
+-----------------------------------------------------------
+
+MSB C+D
+110p pppr rrrr 0000 <OP> A, Rr
+110p ppp- ---- 0001 <OP> A, (H)
+110p pppr rrrr 1000 <OP> Rr, A
+110p ppp- ---- 1001 <OP> (H), A
+
+-----------------------------------------------------------
+
+MSB E+F
+111k kkkr rrrr nnnn <OP> Rr, N
+
+-----------------------------------------------------------
+-----------------------------------------------------------
+ALU INSTRUCTIONS GROUPS
+-----------------------------------------------------------
+-----------------------------------------------------------
+
+P-group - used for MSBs 8, 9, A, B, C and D
+
+0000 AD      - Addition
+0001 AND     - AND
+0010 SB      - Subtraction
+0011 OR      - OR
+0100 ADS     - Addition Skip   (if result overflows)
+0101 ANDS    - AND Skip        (if results in zero)
+0110 SBS     - Subtracted Skip (if result underflows)
+0111 XOR     - XOR
+1000 TAD  NC - Test Addition NoCarry
+1001 TAND NZ - Test AND NonZero
+1010 TSB  NC - Test Subtract NoCarry
+1011 TSB  NZ - Test Subtract NonZero
+1100 TAD  C  - Test Addition Carry
+1101 TAND Z  - Test AND Zero
+1110 TSB  C  - Test Subtract Carry
+1111 TSB  Z  - Test Subtract Zero
+
+-----------------------------------------------------------
+
+K-group - used for MSBs E and F
+this group is only ever used with immediates so I is in all for clarity
+0000 ADI     - Addition
+0001 ADIS    - Addition Skip
+0010 SBI     - Subtract
+0011 SBIS    - Subtract Skip
+0100 TADI NC - Test Addition NoCarry
+0101 TADI C  - Test Addition Carry
+0110 TSBI NC - Test Subtract NoCarry
+0111 TSBI C  - Test Subtract Carry
+1000 ADI5    - Addition to only the low 5-bits
+1001 ADIMS   - Addition Mixed Skip (tests a flag, if 0 add 5, if 1 add 6, and then skip if an overflow happens)
+1010 n/d
+1011 n/d
+1100 TADI5   - Test Addition 5-bits and skip if it overflows
+1101 n/d
+1110 n/d
+1111 n/d
+
+-----------------------------------------------------------
+
+in further detail, instructions that begin with T won't write back the result into the accumulator or other target
+and instead only conditionally skips the next instruction based on its checked condition
+
+instructions that have S and don't begin with T (ADS, ADIS, SBS, SBIS, ANDS, ANDIS, ADIMS) do write the results into the target
+and also causes a skip if an overflow or underflow happens for add and sub, or if the result is zero for logical AND
+
+-----------------------------------------------------------
