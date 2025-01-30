@@ -2,7 +2,7 @@
 ;  ///                  SYSTEM INFORMATION                  ///
 ; ////////////////////////////////////////////////////////////
 
-; entrypoint: unknown
+; entrypoint: assumed to be 0
 
 ; interrupt vectors:
 
@@ -11,6 +11,8 @@
 ; TONE 3 - 16~31  ($10~$1F) - /32 prescalar
 ; TONE 2 - 32~63  ($20~$3F) - /16 prescalar
 ; TONE 1 - 64~255 ($40~$FF) - /8  prescalar (same as CPU exec rate)
+
+; setting N timer below the TONE 4 range will disable it
 
 ; RG register
 
@@ -202,7 +204,7 @@ Decode_Command:
 ; ////////////////////////////////////////////////////////////
 
 iorg $20
-IRQ_TONE_4: ; fired only by NOISE mode
+IRQ_TONE_4: ; fired only by PSG mode
 		mov a, r$1F
 		mix r$1E    ; mix the squares with noise
 		out da
@@ -340,7 +342,7 @@ Tone4_Vector:
 
 		mov x, rg         ; sample the pseudorandom register
 		mov y, r$11       ; this is always set to $3 (10 pointer's MSB)
-		mul2              ; only one stage so basically just adding with 3 and shifting to the right once
+		mul2              ; only one stage so basically just adding with 3 and shifting to the left once
 		andi a, %00011111 ; set it as the new starting phase for noise master osc
 		ad r$10, a
 
@@ -489,11 +491,13 @@ PCM_Command:
 		sb r$0, $1    ; second val - 1
 		mvi a, $1     ; fire INT1
 		out pb
-		tbl0 a, (r$2) ; take the first RXed value from tone waveform location
-		mvi r$A, $88
-		mvi r$8, $7
-		mov n, a      ; set that something to the timer freq
+		tbl0 a, (r$2) ; take the first RXed value from tone waveform location ($1FE)
+		mvi r$A, $88  ; set first samples as neutral
+		mvi r$8, $7   ; set adaptation level to center
+		mov n, a      ; set the looked up frequency into N
 		mvi md0, $2   ; enable tone interrupt
+
+; note: Star Speeder looks up a frequency value of either 04 or 06 which points to $96 and $6B
 
 .lk_loop:
 	tsbi nc r$6, $1   ; lock here while r6 is zero, this prevents the main command wait loop to run untill the sample ends
@@ -550,7 +554,7 @@ SUB_Init_RAM:
 		mvi h, $1F    ; wipe RAM from 1F to 0
 		mvi a, $0
 .loop:
-		mov (h), a    ; clear all the RAM from r1F to r0
+		mov (h), a    ; clear all the RAM to zero at r1F ~ r0
 	sbis h, $1
 	jmp .loop
 
