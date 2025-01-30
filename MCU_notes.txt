@@ -7,7 +7,7 @@ The 1771 is a harvard architecture machine and therefore has two memory maps
 
 Data:
 00~1F = scratchpad RAM registers, can do anything
-20~3F = stack and additional RAM, can only be accessed trough the (H) addressing mode
+20~3F = stack and additional RAM, can only be accessed through the (H) addressing mode
 
 Instruction:
 all RAM, and 16-bit, but
@@ -19,8 +19,9 @@ $002C is TONE 1 interrupt vector
 $0048 is NOISE interrupt vector
 $0080 is TIME interrupt vector
 $0060 is EXT interrupt vector
-and for the 1771 at least, there are only 512 instruction words, ending the instruction map at $02FF
-but according to the EVACHIP, it's capable of addressing 64Kwords as can be seen from the CALL1, TBL1 and CALL0, TBL0 instructions
+and for the 1771 at least, there are only 512 instruction words, ending the instruction map
+at $02FF, but according to the EVACHIP, it's capable of addressing 64Kwords as can be seen
+from the CALL1, TBL1 and CALL0, TBL0 instructions
 
 
 
@@ -32,23 +33,28 @@ Interrupt sources are weird as well:
 - NOISE triggers when the PNC2/RG2 3-bit LFSR outputs high
 - TIME triggers when 4096 OSC cycles have elapsed
 
+if the N timer reg is below the TONE 4 range, it's effectively disabled
 
-
-OSC being the raw 5 or 6MHz signals from the XI and XO pins
+OSC being the raw 5 or 6MHz signals from the XI and XO pins,
+my calculations assume a pure 6MHz signal for now
 
 Instruction timing (machine cycles) are set to happen every 8 cycles
 
-All instructions take 1 machine cycle (8 cycles) but TBL0/1 and CALL0/1 take 2 machine cycles (16 cycles)
+All instructions take 1 machine cycle (8 cycles);
+but TBL0/1 and CALL0/1 take 2 machine cycles (16 cycles)
 
 
 
-The DAC is also weird, it seems to output in a way where values if $80 and above are output as-is while $7F and below are inverted
-maybe because it plays better with the DAC being signed and having actual negative voltages?
+The DAC outputs signed samples, therefore anything under 0 untill $80 is negative
+maybe because it plays better with the DAC being signed and having actual negative voltages? 
+there are definitely two speaker wires coming out of the chip
 
-you can kind of see on the Super Cassette Vision a section in the ADPCM decoder where it checks for that range and invert the value
-before forwarding it into the DAC, as the ADPCM level counter is unsigned
+you can kind of see on the Super Cassette Vision a section in the ADPCM decoder where it
+checks for that range and invert the value before forwarding it into the DAC,
+as the ADPCM level counter is unsigned
 
-Waveforms are also visibly half-inverted when opening this ROM as a sample in furnace
+Waveforms are also visibly half-inverted when opening this ROM as a sample in furnace or any 
+audio editor with unsigned 8-bit imports (assuming you have un-byte swapped the ROM first)
 
 -----------------------------------------------------------
 
@@ -70,7 +76,8 @@ MD          = Mode and flags register, 10 bits wide
 MD1         = only flags 7, 6, 5
 MD0         = only flags 9, 8, 4, 3, 2, 1, 0
 
-Register pairing: for some instructions such as TBL0/1 and CALL0/1, the pairs are made up of Rn (even, low) : Rn (odd, high) such as R0 low and R1 high
+Register pairing: for some instructions such as TBL0/1 and CALL0/1, the pairs are made up of
+Rn (even, low) : Rn (odd, high) such as R0 low and R1 high
 
 MD reg flags:
 0 - 32/64 : chooses the size of the ADIMS instruction, if 0 ADIMS only adds to the low 5 bits, or else it adds to the low 6
@@ -84,6 +91,7 @@ MD reg flags:
 8 - OUT   : ????????
 9 - IF    : ?????????????????
 
+Firefox F-7 does use the NSF bits, clueless as to what they do
 
 -----------------------------------------------------------
 
