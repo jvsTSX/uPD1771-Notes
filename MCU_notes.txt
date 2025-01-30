@@ -10,7 +10,7 @@ Data:
 20~3F = stack and additional RAM, can only be accessed through the (H) addressing mode
 
 Instruction:
-all RAM, and 16-bit, but
+all ROM, and 16-bit, with the following special locations:
 $0000 is the RESET vector
 $0020 is TONE 4 interrupt vector
 $0024 is TONE 3 interrupt vector
