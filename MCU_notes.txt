@@ -17,8 +17,13 @@ $0024 is TONE 3 interrupt vector
 $0028 is TONE 2 interrupt vector
 $002C is TONE 1 interrupt vector
 $0048 is NOISE interrupt vector
-$0080 is TIME interrupt vector
 $0060 is EXT interrupt vector
+$0080 is TIME interrupt vector
+
+interrupts' order priority is their vector number order
+TONE, NOISE, EXT, TIME
+only one interrupt can happen at one time since there is only one buffer register for A and SKIP
+
 and for the 1771 at least, there are only 512 instruction words, ending the instruction map
 at $02FF, but according to the EVACHIP, it's capable of addressing 64Kwords as can be seen
 from the CALL1, TBL1 and CALL0, TBL0 instructions
@@ -30,7 +35,7 @@ Interrupt sources are weird as well:
 - TONE 3 triggers when N timer reg is set to $10 ~ $1F and has a prescalar of OSC/32
 - TONE 2 triggers when N timer reg is set to $20 ~ $3F and has a prescalar of OSC/16
 - TONE 1 triggers when N timer reg is set to $40 ~ $FF and has a prescalar of OSC/8
-- NOISE triggers when the PNC2/RG2 3-bit LFSR outputs high
+- NOISE triggers in four rates depending on the bits NSF2 and NSF3
 - TIME triggers when 4096 OSC cycles have elapsed
 
 if the N timer reg is below the TONE 4 range, it's effectively disabled
@@ -46,7 +51,7 @@ but TBL0/1 and CALL0/1 take 2 machine cycles (16 cycles)
 
 
 The DAC outputs signed samples, therefore anything under 0 untill $80 is negative
-maybe because it plays better with the DAC being signed and having actual negative voltages? 
+maybe because it plays better with the DAC having actual negative voltages? 
 there are definitely two speaker wires coming out of the chip
 
 you can kind of see on the Super Cassette Vision a section in the ADPCM decoder where it
@@ -83,15 +88,30 @@ MD reg flags:
 0 - 32/64 : chooses the size of the ADIMS instruction, if 0 ADIMS only adds to the low 5 bits, or else it adds to the low 6
 1 - TN    : enable tone interrupts
 2 - NS    : enable noise interrupt
-3 - NSF1  : ?
-4 - NSF2  : ??
-5 - NSF3  : ???
+3 - NSF1  : enable the RG2 LFSR, it generates a 7-step waveform that flips the DAC sign bit, clearing this to 0 drains the LFSR
+4 - NSF2  : selects between bits F16/F13 (0) and F14/F17 (1) on the TIME counter for the noise interrupt
+5 - NSF3  : selects either 16/17 or 13/14 bits (0 and 1 respectively)
 6 - TIME  : enable time interrupt (OSC / 4096)
 7 - EXT   : enable external interrupt
-8 - OUT   : ????????
-9 - IF    : ?????????????????
+8 - OUT   : set PB to output
+9 - IF    : sets the higher PB bits as bus signals (InterFace?) - set to 1 on reset so it defaults to bus signals enabled
 
-Firefox F-7 does use the NSF bits, clueless as to what they do
+Firefox F-7 does use the NSF bits, SCV always leave them at 0
+it also messes with OUT and IF to disable the special bus signals, SCV leaves them at normal
+
+NSF3 NSF2
+0    0    = F13 Fosc /256  (every 32 mcycles)
+0    1    = F14 Fosc /512  (every 64 mcycles)
+1    0    = F16 Fosc /2048 (every 256 mcycles)
+1    1    = F17 Fosc /4096 (every 512 mcycles) same as TIME?
+
+numbers based on the 5.1MHz division ratios in the 
+"firmware specification" document from Ogura's site
+
+i know where they are on the schematic (try locating something that has N in the bottom right page)
+but the clock wiring goes everywhere and i don't know where it starts or ends
+
+so far they do tell me the NSF3 and NSF2 selection bits very well
 
 -----------------------------------------------------------
 
@@ -101,7 +121,7 @@ Firefox F-7 does use the NSF bits, clueless as to what they do
 
 MSB 0
 
-0000 0000 0000 0000 NOP        - does nothing
+0000 0000 0000 0000 NOP        - does nothing, skipped instructions execute as this
 0000 0000 0000 0010 OUT PA     - outputs Acc into Port A
 0000 0000 0000 0100 OUT PB     - outputs Acc into Port B
 0000 0000 0000 0101 STF        - sets the carry flag
@@ -155,8 +175,11 @@ MSB 1
 0001 101r rrrr 0100 TBL1 Y, (Rr)
 0001 101r rrrr 1000 CALL1 (Rr)    - same as CALL0 but in the range of $8000 trough $FFFF
 
-- Note that TBL instruction is always lagging by 1 word, so addressing $200 will give you $1FE instead
-- and yes, TBL addresses individual bytes by selecting the low or high half of the ROM word based on the pair's low register's bit 0 (0 = low, 1 = high)
+- TBL addresses individual bytes by selecting the low or high half of the ROM word based on the pair's low register's bit 0 (0 = low, 1 = high)
+in other words, little endian
+
+- note: an initial mistake of mine assumes that TBLx and CALLx are lagging behind a word, they're in fact never lagging behind
+it's just that the dumps skipped the first instruction at $0000 (for both SCV and Fox cases it's a NOP)
 
 -----------------------------------------------------------
 

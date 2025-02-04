@@ -1,3 +1,4 @@
+nop
 in pa
 in pb
 db $0000FFFF
@@ -509,4 +510,3 @@ adi r$1E, $7
 tand z <U/D ADDR MODE> - OP $DBDB
 tandi z h, $D2
 andis md, $9D
-nop

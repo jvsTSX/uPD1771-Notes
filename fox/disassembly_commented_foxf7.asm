@@ -17,13 +17,14 @@
 ; followed by the command number of 1~7 with bit 3 being set, a command of 0 (8) will result in going back to the wait loop
 
 ; $-0 $-9 - tone  - PING
-; $-0 $-A - noise - 
-; $-0 $-B - noise - 
-; $-0 $-C - noise - 
+; $-0 $-A - noise - FLYBY
+; $-0 $-B - noise - EXPLOSION
+; $-0 $-C - noise - SHOOT
 ; $-0 $-D - tone  - SIREN
 ; $-0 $-E - tone  - SIREN 3X
-; $-0 $-F - noise - 
+; $-0 $-F - noise - RUMBLE
 
+; thanks to ReverendGumby for showing a footage from MiSTer running this firmware playing each SFX ID
 
 ; /////////////////// TONE-TYPE //////////////////
 
@@ -59,6 +60,7 @@
 
 
 START:
+		nop
 		in pa
 		in pb
 		db $FFFF

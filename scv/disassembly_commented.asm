@@ -2,7 +2,7 @@
 ;  ///                  SYSTEM INFORMATION                  ///
 ; ////////////////////////////////////////////////////////////
 
-; entrypoint: assumed to be 0
+; entrypoint: $0000
 
 ; interrupt vectors:
 
@@ -151,6 +151,7 @@ rompad $00 ; pre-fill ROM with $00
 iorg $0
 
 START:
+		nop
 		in pa
 		in pb
 		db $FFFF      ; unknown instruction but also present on Firefox
@@ -491,7 +492,7 @@ PCM_Command:
 		sb r$0, $1    ; second val - 1
 		mvi a, $1     ; fire INT1
 		out pb
-		tbl0 a, (r$2) ; take the first RXed value from tone waveform location ($1FE)
+		tbl0 a, (r$2) ; take the first RXed value from tone waveform location ($200)
 		mvi r$A, $88  ; set first samples as neutral
 		mvi r$8, $7   ; set adaptation level to center
 		mov n, a      ; set the looked up frequency into N
@@ -567,11 +568,11 @@ SUB_Init_RAM:
 
 ;///////////////////////////////////////////////
 data_waveform_begin:
-org $1FE
+org $200
 db $00, $00, $FA, $FA, $96, $BC, $6B, $7D, $53, $5E
 
 adpcm_adapt_table:
-org $208
+org $20A
 db $FF, $FF, $00, $FF, $00, $00, $01, $01, $01, $01, $00, $00, $FF, $00, $FF, $FF, $00, $00, $00, $00, $00, $00
 
 ;/////////////////////////////////////////////// clamps received frequency to $20
@@ -647,14 +648,14 @@ SUB_ADPCM_Volume:
 ;  ///                    ROM DATA AREA                     ///
 ; ////////////////////////////////////////////////////////////
 
-org $26E
+org $270
 tone_waveform_data:
 db $DF, $B3, $FF, $F5, $C9, $EE, $84, $A4, $3E, $1F, $70, $59, $7D, $7F, $5D, $73, $17, $39, $8F, $00, $0F, $87, $36, $25, $46, $41, $36, $3E, $1F, $2B, $00, $13 ; organ
 db $FF, $D0, $0D, $BC, $5D, $41, $2F, $7F, $2C, $29, $37, $34, $3A, $38, $22, $3A, $44, $00, $48, $4C, $6C, $3D, $1D, $37, $27, $20, $31, $2B, $33, $32, $00, $33 ; buzzy
 db $AC, $94, $D7, $C2, $F1, $E8, $FF, $F9, $F3, $FA, $D6, $E6, $B4, $C5, $88, $9B, $2E, $16, $56, $43, $72, $66, $7D, $7B, $75, $7F, $5B, $68, $33, $48, $00, $1C ; sine ~ triangle
 db $F5, $CD, $E5, $FF, $82, $B5, $41, $28, $58, $54, $50, $54, $58, $52, $67, $5E, $77, $6E, $7D, $7A, $7A, $7A, $7B, $79, $7E, $7D, $7F, $7F, $76, $7D, $00, $52 ; piano
 
-org $2FE
+org $300
 adpcm_delta_table:
 db $B8, $95, $DA, $CC, $EE, $E5, $FD, $F6, $0A, $03, $1B, $12, $34, $26, $6B, $48
 db $CE, $B6, $E6, $DC, $F4, $EE, $FE, $F9, $07, $02, $12, $0C, $24, $1A, $4A, $32

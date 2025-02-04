@@ -1,9 +1,9 @@
 the ADPCM command is interesting and also extremely stupid
 instead of feeding the 8-bit value from the message data into
-the N timer, it instead looks up an index from 1FE~2FE (waveform mode waves) 
+the N timer, it instead looks up an index from 200~300 (waveform mode waves) 
 and then feeds that to the N timer
 
-$1FE
+$200
 
     0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F - LSB (right)
 
@@ -25,7 +25,7 @@ E   F5 CD E5 FF 82 B5 41 28 58 54 50 54 58 52 67 5E
 F   77 6E 7D 7A 7A 7A 7B 79 7E 7D 7F 7F 76 7D 00 52
 \ MSB (left)
 
-$2FE
+$300
 
 Star Speeder uses settings 04 and 06 specifically, the firmware uses TONE1 vector
 for running the ADPCM routine, so this will only list the values above $3F, since 

@@ -1,3 +1,4 @@
+nop
 in pa
 in pb
 db $0000FFFF
@@ -509,4 +510,3 @@ db $00002F67
 ad <U/D ADDR MODE> - OP $C192
 db $000005DB
 db $000000B3
-nop
