@@ -66,7 +66,7 @@ audio editor with unsigned 8-bit imports (assuming you have un-byte swapped the 
                         REGISTERS
 
 -----------------------------------------------------------
-PC          = Program Counter
+PC          = Program Counter, a 16-bit linear counter, not a LFSR like uPD777
 Rr          = RAM Registers 0 trough 1F
 A or Acc    = the accumulator register
 X           = multiplicand register, 7 bits wide
@@ -76,15 +76,19 @@ RG or PNC   = Random Generator register, it's a 7-bit XNOR LFSR that is initiali
 RG2 or PNC2 = Random Generator 2, it can't seem to be directly set but it's a 3-bit XNOR LFSR that fires the NOISE interrupt
 PA          = Port A, typically a data port between the host device and microcontroller
 PB          = Port B, typically a control signaling port
-DA          = audio DAC register
+DA          = audio DAC register, works with a 9-bit two's completement signed value (+255 to -256)
 MD          = Mode and flags register, 10 bits wide
 MD1         = only flags 7, 6, 5
 MD0         = only flags 9, 8, 4, 3, 2, 1, 0
+SP          = 3-bit stack pointer, the stack only holds return values and has eight levels, stored at RAM past r$1F
+
+Additionally, there is a shadow A register and a shadow SKIP register,
+these are used whenever an interrupt happens, therefore active interrupts do not nest, one must finish before the next is taken
 
 Register pairing: for some instructions such as TBL0/1 and CALL0/1, the pairs are made up of
 Rn (even, low) : Rn (odd, high) such as R0 low and R1 high
 
-MD reg flags:
+MD0 reg flags:
 0 - 32/64 : chooses the size of the ADIMS instruction, if 0 ADIMS only adds to the low 5 bits, or else it adds to the low 6
 1 - TN    : enable tone interrupts
 2 - NS    : enable noise interrupt
@@ -92,9 +96,44 @@ MD reg flags:
 4 - NSF2  : selects between bits F16/F13 (0) and F14/F17 (1) on the TIME counter for the noise interrupt
 5 - NSF3  : selects either 16/17 or 13/14 bits (0 and 1 respectively)
 6 - TIME  : enable time interrupt (OSC / 4096)
-7 - EXT   : enable external interrupt
-8 - OUT   : set PB to output
-9 - IF    : sets the higher PB bits as bus signals (InterFace?) - set to 1 on reset so it defaults to bus signals enabled
+7 - 
+
+MD1 reg flags:
+0 - 
+1 - 
+2 - 
+3 - 
+4 - 
+5 - EXT   : enable external interrupt
+6 - OUT   : set PB to output
+7 - IF    : sets the higher PB bits as bus signals (InterFace?) - set to 1 on reset so it defaults to bus signals enabled
+
+"MD" register (from the 'ALU md, n' instruction group):
+0 - 32/64
+1 - TN
+2 - NS
+3 - NSF1
+4 - OUT
+5 - IF
+6 - NSF2
+7 - NSF3
+
+MD itself:
+0 - (0) 32/64 - goes to ADIMS
+1 - (0) TN    - masks interrupt enable for tone
+2 - (0) NS    - masks interrupt enable for noise
+3 - (0) NSF1  - goes right into PNC2
+8 - (0) TIME  - masks interrupt enable for time
+9 - (1) EXT   - masks interrupt enable for ext
+4 - (1) OUT
+5 - (1) IF
+6 - (0) NSF2  - goes into the ripple counter
+7 - (0) NSF3  - also into the ripple counter
+
+the bit order is relative to MD0 and MD1, but the order of the items are relative to the die and schematics
+
+
+
 
 Firefox F-7 does use the NSF bits, SCV always leave them at 0
 it also messes with OUT and IF to disable the special bus signals, SCV leaves them at normal
@@ -178,13 +217,17 @@ MSB 1
 - TBL addresses individual bytes by selecting the low or high half of the ROM word based on the pair's low register's bit 0 (0 = low, 1 = high)
 in other words, little endian
 
-- note: an initial mistake of mine assumes that TBLx and CALLx are lagging behind a word, they're in fact never lagging behind
+- note: an initial mistake of mine assumes that TBLx and CALLx are lagging behind a word, they're in fact never lagging behind,
 it's just that the dumps skipped the first instruction at $0000 (for both SCV and Fox cases it's a NOP)
+
+- implementation detail: TBL is essencially a weird CALL0/1, it pushes the PC and uses it as a general pointer to retrieve the data,
+but it never completes the jump, it just uses the stack as a temporary holder, this could be potentially ignored but beware that
+the stack state matters, specially if it's at the last call level or your program relies on using part of the stack memory as variables
 
 -----------------------------------------------------------
 
 MSB 2
-0010 0000 nnnn 0000 JPS n         - jumps to a page (PC = $xx00)
+0010 0000 nnnn 0000 JPP n         - jumps to a page (PC = $xx00) (due to a typo i had named it JPS myself but it's actually JPP seeing another doc)
 0010 0001 0nnn nnnn MVI MD0, n
 0010 1000 nnnn nnnn JMPFZ n       - sets the low half of PC as the 8-bit constant (PC = $HHxx) if (some flag? ALU? internal Zero flag?) is clear, or else just keep going if it's 1
 
@@ -220,7 +263,7 @@ ALU OPS
 MSB 8+9
 100p ppp0 nnnn nnnn <OP>I A, n
 1000 ppp1 nnn0 0000 <OP>I MD1, n
-1001 ppp1 nnnn nnnn <OP>I MD0, n
+1001 ppp1 nnnn nnnn <OP>I MD, n
 
 -----------------------------------------------------------
 
