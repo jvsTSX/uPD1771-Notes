@@ -9,7 +9,7 @@ Data:
 00~1F = scratchpad RAM registers, can do anything
 20~3F = stack and additional RAM, can only be accessed through the (H) addressing mode
 
-Instruction:
+Instruction memory map:
 all ROM, and 16-bit, with the following special locations:
 $0000 is the RESET vector
 $0020 is TONE 4 interrupt vector
@@ -50,7 +50,7 @@ but TBL0/1 and CALL0/1 take 2 machine cycles (16 cycles)
 
 
 
-The DAC outputs signed samples, therefore anything under 0 untill $80 is negative
+The DAC outputs signed samples, therefore anything under 0 until $80 is negative
 maybe because it plays better with the DAC having actual negative voltages? 
 there are definitely two speaker wires coming out of the chip
 
@@ -72,7 +72,7 @@ A or Acc    = the accumulator register
 X           = multiplicand register, 7 bits wide
 Y           = multiplier register, 5 bits wide
 H           = RAM pointer register, 6 bits wide, when used as pointer it's written as (H)
-RG or PNC   = Random Generator register, it's a 7-bit XNOR LFSR that is initialized to 0 and is clocked every machine cycle
+RG or PNC   = Random Generator register, it's a 7-bit XNOR LFSR that is initialized to 0 and is clocked every machine cycle, more info below
 RG2 or PNC2 = Random Generator 2, it can't seem to be directly set but it's a 3-bit XNOR LFSR that fires the NOISE interrupt
 PA          = Port A, typically a data port between the host device and microcontroller
 PB          = Port B, typically a control signaling port
@@ -92,7 +92,7 @@ MD0 reg flags:
 0 - 32/64 : chooses the size of the ADIMS instruction, if 0 ADIMS only adds to the low 5 bits, or else it adds to the low 6
 1 - TN    : enable tone interrupts
 2 - NS    : enable noise interrupt
-3 - NSF1  : enable the RG2 LFSR, it generates a 7-step waveform that flips the DAC sign bit, clearing this to 0 drains the LFSR
+3 - NSF1  : enable the RG2 LFSR, it generates a 7-step waveform that flips the DAC sign bit, clearing this to 0 disables the NS' effect on DAC sign
 4 - NSF2  : selects between bits F16/F13 (0) and F14/F17 (1) on the TIME counter for the noise interrupt
 5 - NSF3  : selects either 16/17 or 13/14 bits (0 and 1 respectively)
 6 - TIME  : enable time interrupt (OSC / 4096)
@@ -109,7 +109,7 @@ MD1 reg flags:
 7 - IF    : sets the higher PB bits as bus signals (InterFace?) - set to 1 on reset so it defaults to bus signals enabled
 
 "MD" register (from the 'ALU md, n' instruction group):
-0 - 32/64
+0 - 32/64     (see MD0 for bit descriptions)
 1 - TN
 2 - NS
 3 - NSF1
@@ -132,6 +132,70 @@ MD itself:
 
 the bit order is relative to MD0 and MD1, but the order of the items are relative to the die and schematics
 
+
+
+RG1 or PNC1 register specifics:
+this register is a 7-bit XNOR LFSR with the layout below
+
+           /---------|'''''''|
+           |         | XNOR  |>>---\
+           |   /-----|_______|     |
+           x   x                   v
+output <- [6] [5] [4] [3] [2] [1] [0]
+
+the bit order in here is corresponding to the X register as well
+bit 0 of RG1 is bit 0 of X register, and so on until bit 6...
+
+this (N)LFSR inserts from the least significant bit and shifts to the left, giving you a pattern that starts
+somewhat like this
+
+xx-----v <<
+000 0000
+000 0001
+000 0011
+000 0111
+000 1111
+001 1111
+011 1111
+111 1110
+111 1101
+...
+
+if this helps: this LFSR is the same one as the game boy's APU noise when you set it to short mode
+
+this register only gets reset to its all-0 (equivalent to all-1 in a XOR LFSR) state when the CPU is reset
+and is clocked by the CPU's instruction clock, so it shifts every 8 input clock cycles, the schematics suggest that it
+will not clock if the CPU is halted as well, which might explain why the 017 firm wait-loops
+
+
+
+RG2 or PNC2 specifics:
+similarly to RG1, this is a XNOR LFSR that only gets reset to all-0 on CPU reset, is clocked by the
+instruction rate (8 input clocks) and stops clocking if the CPU halts... but unlike it
+it's only 3 bits, and the wiring of the XNOR gate inputs is changed based on the NSF1 flag on the MD register
+
+this is the register when NSF1 is set to 1 - it functions like a LFSR in this state
+
+ [XNOR]--\
+ |   |   |
+ x   x   v
+[2] [1] [0] <<
+
+and this is the register when NSF1 is cleared to 0 - it appears to just generate a square wave
+
+    [XNOR]--\
+   GND   |  |
+         x  |
+[2] [1] [0] <
+
+GND (0) XNOR 0 -> 1
+GND (0) XNOR 1 -> 0
+
+the output of this LFSR is ANDed with NSF1 flag, it only lets it affect the DAC sign when it's set to 1
+or else it just assumes a noise sign of 0
+
+the shifting order of this LFSR doesn't matter, unlike RG1 where it's loaded into a register
+LFSR state here is insignificant except for the last bit of the LFSR
 
 
 
@@ -181,7 +245,7 @@ MSB 0
 0000 0101 0000 0100 MUL1       - A = (A + Y >> 1)
 0000 0101 0000 1100 MUL2       - A = (X + Y >> 1) if Y bit 0 is 1, or else the same as MUL1
 
-0000 0110 0000 0010 OFF   - shuts down the 1771 untill reset?
+0000 0110 0000 0010 OFF   - shuts down the 1771 until reset?
 
 0000 1000 0000 0000 RET   - return from regular subroutine
 0000 1000 0000 0001 RETS  - return from subroutine and then unconditionally skip next instruction
@@ -337,5 +401,6 @@ and instead only conditionally skips the next instruction based on its checked c
 
 instructions that have S and don't begin with T (ADS, ADIS, SBS, SBIS, ANDS, ANDIS, ADIMS) do write the results into the target
 and also causes a skip if an overflow or underflow happens for add and sub, or if the result is zero for logical AND
+
 
 -----------------------------------------------------------
